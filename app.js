@@ -32,6 +32,7 @@ const PANELS = {
   assets:     { title: 'Assets & HR',         sub: 'Equipment · Licenses · Payroll · Personnel' },
   compliance: { title: 'Compliance Calendar', sub: 'Regulatory filings · Tax deadlines · Insurance' },
   kpi:        { title: 'KPI Dashboard',       sub: 'Revenue · MRR · Burn rate · Profit margin' },
+  documents:  { title: 'Documents',           sub: 'Legal filings · Operating agreements · Contracts' },
 };
 
 function switchPanel(name) {
@@ -82,6 +83,7 @@ const App = {
     this.AP.render();
     this.Assets.render();
     this.Compliance.render();
+    this.Documents.render();
     this.KPI.load();
     this.refreshBadges();
     switchPanel('profile');
@@ -168,7 +170,7 @@ const App = {
   },
 
   openAddModal() {
-    const map = { profile: () => App.openProfileModal(), ar: () => App.AR.openModal(), ap: () => App.AP.openModal(), assets: () => App.Assets.openModal(), compliance: () => App.Compliance.openModal(), kpi: () => App.KPI.saveSnapshot() };
+    const map = { profile: () => App.openProfileModal(), ar: () => App.AR.openModal(), ap: () => App.AP.openModal(), assets: () => App.Assets.openModal(), compliance: () => App.Compliance.openModal(), documents: () => App.Documents.openModal(), kpi: () => App.KPI.saveSnapshot() };
     (map[this.currentPanel] || (() => {}))();
   },
 
@@ -192,6 +194,11 @@ const App = {
     const compBadge = $('comp-badge');
     compBadge.textContent = compUrgent;
     compBadge.style.display = compUrgent ? '' : 'none';
+    // Documents expiring badge
+    const docsExpiring = load('documents', []).filter(r => r.status === 'Expired' || r.status === 'Expiring Soon' || (r.expiration && r.status !== 'Archived' && daysUntil(r.expiration) <= 30 && daysUntil(r.expiration) >= 0)).length;
+    const docsBadge = $('docs-badge');
+    docsBadge.textContent = docsExpiring;
+    docsBadge.style.display = docsExpiring ? '' : 'none';
   },
 
   // ── Business Profile ──────────────────────────────────────
@@ -657,6 +664,122 @@ const App = {
           </div>
         </div>`;
       }).join('');
+    },
+  },
+
+  // ── Documents ─────────────────────────────────────────────
+  Documents: {
+    editId: null,
+    openModal(id) {
+      this.editId = id || null;
+      $('docs-modal-title').textContent = id ? '✏️ Edit Document' : '📄 Add Document';
+      if (id) {
+        const rec = load('documents', []).find(r => r.id === id);
+        if (rec) {
+          $('doc-name').value         = rec.name;
+          $('doc-type').value         = rec.type;
+          $('doc-entity').value       = rec.entity || '';
+          $('doc-ref').value          = rec.ref || '';
+          $('doc-effective').value    = rec.effective || '';
+          $('doc-expiration').value   = rec.expiration || '';
+          $('doc-status').value       = rec.status;
+          $('doc-jurisdiction').value = rec.jurisdiction || '';
+          $('doc-notes').value        = rec.notes || '';
+        }
+      } else {
+        ['doc-name','doc-entity','doc-ref','doc-jurisdiction','doc-notes'].forEach(i => $(i).value = '');
+        $('doc-type').value       = 'Secretary of State';
+        $('doc-effective').value   = today();
+        $('doc-expiration').value  = '';
+        $('doc-status').value      = 'Active';
+      }
+      $('doc-edit-id').value = id || '';
+      $('modal-documents').classList.add('open');
+    },
+    save() {
+      const name = $('doc-name').value.trim();
+      if (!name) { toast('Document name is required.', 'error'); return; }
+      const recs = load('documents', []);
+      const rec = {
+        id: this.editId || uid(),
+        name,
+        type:         $('doc-type').value,
+        entity:       $('doc-entity').value.trim(),
+        ref:          $('doc-ref').value.trim(),
+        effective:    $('doc-effective').value,
+        expiration:   $('doc-expiration').value,
+        status:       $('doc-status').value,
+        jurisdiction: $('doc-jurisdiction').value.trim(),
+        notes:        $('doc-notes').value.trim(),
+      };
+      if (this.editId) {
+        const idx = recs.findIndex(r => r.id === this.editId);
+        if (idx > -1) recs[idx] = rec;
+      } else {
+        recs.push(rec);
+      }
+      store('documents', recs);
+      App.closeModal('modal-documents');
+      this.render();
+      App.refreshBadges();
+      toast(this.editId ? 'Document updated.' : 'Document added.');
+      this.editId = null;
+    },
+    delete(id) {
+      if (!confirm('Delete this document?')) return;
+      store('documents', load('documents', []).filter(r => r.id !== id));
+      this.render(); App.refreshBadges(); toast('Document deleted.');
+    },
+    render() {
+      let recs = load('documents', []);
+      const search       = ($('docs-search')?.value || '').toLowerCase();
+      const filterType   = $('docs-filter-type')?.value || '';
+      const filterStatus = $('docs-filter-status')?.value || '';
+      if (search)       recs = recs.filter(r => r.name.toLowerCase().includes(search) || (r.entity || '').toLowerCase().includes(search) || (r.ref || '').toLowerCase().includes(search));
+      if (filterType)   recs = recs.filter(r => r.type === filterType);
+      if (filterStatus) recs = recs.filter(r => r.status === filterStatus);
+
+      // Stats
+      const all      = load('documents', []);
+      const active   = all.filter(r => r.status === 'Active').length;
+      const expiring = all.filter(r => r.status === 'Expiring Soon' || (r.expiration && r.status !== 'Archived' && r.status !== 'Expired' && daysUntil(r.expiration) <= 30 && daysUntil(r.expiration) >= 0)).length;
+      const expired  = all.filter(r => r.status === 'Expired' || (r.expiration && r.status !== 'Archived' && daysUntil(r.expiration) < 0)).length;
+      const types    = [...new Set(all.map(r => r.type))];
+
+      $('docs-stats').innerHTML = `
+        <div class="stat-card"><div class="stat-label">Total Docs</div><div class="stat-value">${all.length}</div></div>
+        <div class="stat-card"><div class="stat-label">Active</div><div class="stat-value text-green">${active}</div></div>
+        <div class="stat-card"><div class="stat-label">Expiring Soon</div><div class="stat-value text-yellow">${expiring}</div></div>
+        <div class="stat-card"><div class="stat-label">Expired</div><div class="stat-value text-red">${expired}</div></div>`;
+
+      const typeBadge = t => ({
+        'Secretary of State': 'badge-purple', 'Operating Agreement': 'badge-blue',
+        'Statement of Information': 'badge-green', 'Articles of Incorporation': 'badge-purple',
+        'Articles of Organization': 'badge-purple', 'Business License': 'badge-yellow',
+        'EIN Confirmation': 'badge-blue', 'Tax Return': 'badge-green',
+        'Insurance Policy': 'badge-yellow', 'NDA': 'badge-gray',
+        'Contract': 'badge-blue', 'Other': 'badge-gray'
+      }[t] || 'badge-gray');
+      const statusBadge = s => ({ Active: 'badge-green', 'Expiring Soon': 'badge-yellow', Expired: 'badge-red', Draft: 'badge-gray', Archived: 'badge-gray' }[s] || 'badge-gray');
+
+      $('docs-tbody').innerHTML = recs.length ? recs.map(r => {
+        const days = r.expiration ? daysUntil(r.expiration) : null;
+        const countdown = days !== null && r.status !== 'Archived' ? `<span class="badge ${days < 0 ? 'badge-red' : days <= 30 ? 'badge-yellow' : 'badge-gray'}" style="margin-left:6px;font-size:10px">${days < 0 ? `${Math.abs(days)}d expired` : `${days}d left`}</span>` : '';
+        return `<tr>
+          <td class="fw-700">${r.name}${r.ref ? ` <span class="badge badge-gray" style="font-size:10px">#${r.ref}</span>` : ''}</td>
+          <td><span class="badge ${typeBadge(r.type)}">${r.type}</span></td>
+          <td>${r.entity || '—'}</td>
+          <td class="td-muted">${fmtDate(r.effective)}</td>
+          <td>${fmtDate(r.expiration)}${countdown}</td>
+          <td><span class="badge ${statusBadge(r.status)}">${r.status}</span></td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="btn-icon" title="Edit" onclick="App.Documents.openModal('${r.id}')">✏️</button>
+              <button class="btn-icon" title="Delete" onclick="App.Documents.delete('${r.id}')">🗑️</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📄</div><div class="empty-title">No documents yet</div><div class="empty-desc">Click "+ Add Document" to store your first business document.</div></div></td></tr>`;
     },
   },
 

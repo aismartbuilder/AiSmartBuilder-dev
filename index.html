@@ -51,6 +51,11 @@
         <span class="nav-icon">📊</span>
         <span>KPI Dashboard</span>
       </div>
+      <div class="nav-item admin-only" data-panel="documents" id="nav-documents">
+        <span class="nav-icon">📄</span>
+        <span>Documents</span>
+        <span class="nav-badge" id="docs-badge" style="display:none">0</span>
+      </div>
     </nav>
 
     <div class="sidebar-footer">
@@ -470,6 +475,69 @@
         </div>
       </section>
 
+      <!-- ═══════════════════════════════════════════════════
+           PANEL 7 — Documents
+      ═══════════════════════════════════════════════════ -->
+      <section class="panel" id="panel-documents">
+        <div class="section-header">
+          <div>
+            <div class="section-title">Documents</div>
+            <div class="section-desc">Secretary of State filings, Operating Agreements, and legal documents</div>
+          </div>
+          <div class="section-actions">
+            <button class="btn btn-primary" onclick="App.Documents.openModal()">+ Add Document</button>
+          </div>
+        </div>
+
+        <!-- Document Stats -->
+        <div class="stats-row" id="docs-stats"></div>
+
+        <!-- Filter Bar -->
+        <div class="filter-bar">
+          <input class="form-input" type="text" id="docs-search" placeholder="Search documents…" oninput="App.Documents.render()" />
+          <select class="form-select" id="docs-filter-type" onchange="App.Documents.render()">
+            <option value="">All Types</option>
+            <option value="Secretary of State">Secretary of State</option>
+            <option value="Operating Agreement">Operating Agreement</option>
+            <option value="Statement of Information">Statement of Information</option>
+            <option value="Articles of Incorporation">Articles of Incorporation</option>
+            <option value="Articles of Organization">Articles of Organization</option>
+            <option value="Business License">Business License</option>
+            <option value="EIN Confirmation">EIN Confirmation</option>
+            <option value="Tax Return">Tax Return</option>
+            <option value="Insurance Policy">Insurance Policy</option>
+            <option value="NDA">NDA</option>
+            <option value="Contract">Contract</option>
+            <option value="Other">Other</option>
+          </select>
+          <select class="form-select" id="docs-filter-status" onchange="App.Documents.render()">
+            <option value="">All Statuses</option>
+            <option value="Active">Active</option>
+            <option value="Expiring Soon">Expiring Soon</option>
+            <option value="Expired">Expired</option>
+            <option value="Draft">Draft</option>
+            <option value="Archived">Archived</option>
+          </select>
+        </div>
+
+        <div class="table-wrap">
+          <table id="docs-table">
+            <thead>
+              <tr>
+                <th>Document Name</th>
+                <th>Type</th>
+                <th>Entity / Signer</th>
+                <th>Effective Date</th>
+                <th>Expiration Date</th>
+                <th>Status</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="docs-tbody"></tbody>
+          </table>
+        </div>
+      </section>
+
     </div><!-- #content -->
   </div><!-- #main -->
 </div><!-- #app -->
@@ -830,6 +898,78 @@
     <div class="modal-footer">
       <button class="btn btn-secondary" onclick="App.closeModal('modal-compliance')">Cancel</button>
       <button class="btn btn-primary" onclick="App.Compliance.save()">Save Item</button>
+    </div>
+  </div>
+</div>
+
+<!-- Document Modal -->
+<div class="modal-overlay" id="modal-documents">
+  <div class="modal" style="max-width:640px">
+    <div class="modal-header">
+      <div class="modal-title" id="docs-modal-title">📄 Add Document</div>
+      <button class="modal-close" onclick="App.closeModal('modal-documents')">✕</button>
+    </div>
+    <div class="form-grid-2">
+      <div class="form-group">
+        <label class="form-label">Document Name *</label>
+        <input class="form-input" id="doc-name" type="text" placeholder="e.g., Operating Agreement — My Company LLC" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Document Type *</label>
+        <select class="form-select" id="doc-type">
+          <option>Secretary of State</option>
+          <option>Operating Agreement</option>
+          <option>Statement of Information</option>
+          <option>Articles of Incorporation</option>
+          <option>Articles of Organization</option>
+          <option>Business License</option>
+          <option>EIN Confirmation</option>
+          <option>Tax Return</option>
+          <option>Insurance Policy</option>
+          <option>NDA</option>
+          <option>Contract</option>
+          <option>Other</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Entity / Signer</label>
+        <input class="form-input" id="doc-entity" type="text" placeholder="My Company LLC" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reference / Filing #</label>
+        <input class="form-input" id="doc-ref" type="text" placeholder="e.g., C1234567" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Effective Date</label>
+        <input class="form-input" id="doc-effective" type="date" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Expiration Date</label>
+        <input class="form-input" id="doc-expiration" type="date" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Status</label>
+        <select class="form-select" id="doc-status">
+          <option>Active</option>
+          <option>Expiring Soon</option>
+          <option>Expired</option>
+          <option>Draft</option>
+          <option>Archived</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Filing State / Jurisdiction</label>
+        <input class="form-input" id="doc-jurisdiction" type="text" placeholder="California" />
+      </div>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Notes / Description</label>
+      <textarea class="form-textarea" id="doc-notes" placeholder="Key provisions, renewal instructions, filing authority…"></textarea>
+    </div>
+    <input type="hidden" id="doc-edit-id" />
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="App.closeModal('modal-documents')">Cancel</button>
+      <button class="btn btn-primary" onclick="App.Documents.save()">Save Document</button>
     </div>
   </div>
 </div>
