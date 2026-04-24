@@ -5,6 +5,193 @@
 
 'use strict';
 
+// ── Auth Module ─────────────────────────────────────────────
+const Auth = {
+  mode: 'login', // 'login' or 'register'
+
+  // Simple hash for localStorage (not cryptographically secure — fine for local-only app)
+  _hash(str) {
+    let hash = 0;
+    for (let i = 0; i < str.length; i++) {
+      const ch = str.charCodeAt(i);
+      hash = ((hash << 5) - hash) + ch;
+      hash |= 0;
+    }
+    return 'h_' + Math.abs(hash).toString(36);
+  },
+
+  init() {
+    const session = this._getSession();
+    if (session) {
+      this._showDashboard(session);
+    } else {
+      this._showLogin();
+    }
+  },
+
+  _getSession() {
+    try {
+      const s = JSON.parse(localStorage.getItem('biz_auth_session'));
+      if (s && s.email && s.loggedIn) return s;
+    } catch {}
+    return null;
+  },
+
+  _getUsers() {
+    try {
+      return JSON.parse(localStorage.getItem('biz_auth_users')) || [];
+    } catch { return []; }
+  },
+
+  _saveUsers(users) {
+    localStorage.setItem('biz_auth_users', JSON.stringify(users));
+  },
+
+  _showLogin() {
+    document.getElementById('login-screen').style.display = 'flex';
+    document.getElementById('app').style.display = 'none';
+    setTimeout(() => {
+      const emailInput = document.getElementById('login-email');
+      if (emailInput) emailInput.focus();
+    }, 300);
+  },
+
+  _showDashboard(session) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('app').style.display = 'flex';
+  },
+
+  toggleMode() {
+    this.mode = this.mode === 'login' ? 'register' : 'login';
+    const isRegister = this.mode === 'register';
+
+    document.getElementById('login-heading').textContent = isRegister ? 'Create account' : 'Welcome back';
+    document.getElementById('login-subheading').textContent = isRegister ? 'Set up your operations center' : 'Sign in to your operations center';
+    document.getElementById('login-btn-text').textContent = isRegister ? 'Create Account' : 'Sign In';
+    document.getElementById('login-toggle-label').textContent = isRegister ? 'Already have an account?' : "Don't have an account?";
+    document.getElementById('login-toggle-btn').textContent = isRegister ? 'Sign in' : 'Create one';
+    document.getElementById('login-name-field').style.display = isRegister ? '' : 'none';
+    document.getElementById('login-error').textContent = '';
+
+    // Adjust autocomplete hint
+    document.getElementById('login-password').autocomplete = isRegister ? 'new-password' : 'current-password';
+  },
+
+  togglePasswordVisibility() {
+    const pwInput = document.getElementById('login-password');
+    const eyeBtn = document.getElementById('login-eye-btn');
+    if (pwInput.type === 'password') {
+      pwInput.type = 'text';
+      eyeBtn.textContent = '🙈';
+      eyeBtn.title = 'Hide password';
+    } else {
+      pwInput.type = 'password';
+      eyeBtn.textContent = '👁️';
+      eyeBtn.title = 'Show password';
+    }
+  },
+
+  handleSubmit(e) {
+    e.preventDefault();
+    const errorEl = document.getElementById('login-error');
+    errorEl.textContent = '';
+
+    const email = document.getElementById('login-email').value.trim().toLowerCase();
+    const password = document.getElementById('login-password').value;
+    const name = document.getElementById('login-name')?.value.trim() || '';
+
+    if (!email || !password) {
+      errorEl.textContent = 'Please fill in all fields.';
+      return;
+    }
+
+    // Show spinner
+    document.getElementById('login-btn-text').style.display = 'none';
+    document.getElementById('login-btn-spinner').style.display = '';
+    document.getElementById('login-submit-btn').disabled = true;
+
+    // Simulate slight delay for polish
+    setTimeout(() => {
+      if (this.mode === 'register') {
+        this._register(email, password, name, errorEl);
+      } else {
+        this._login(email, password, errorEl);
+      }
+      // Reset spinner
+      document.getElementById('login-btn-text').style.display = '';
+      document.getElementById('login-btn-spinner').style.display = 'none';
+      document.getElementById('login-submit-btn').disabled = false;
+    }, 600);
+  },
+
+  _register(email, password, name, errorEl) {
+    if (password.length < 4) {
+      errorEl.textContent = 'Password must be at least 4 characters.';
+      return;
+    }
+    const users = this._getUsers();
+    if (users.find(u => u.email === email)) {
+      errorEl.textContent = 'An account with this email already exists.';
+      return;
+    }
+    const user = {
+      id: Date.now().toString(36),
+      email,
+      name: name || email.split('@')[0],
+      passwordHash: this._hash(password),
+      createdAt: new Date().toISOString(),
+    };
+    users.push(user);
+    this._saveUsers(users);
+
+    // Auto-login after registration
+    const session = { email: user.email, name: user.name, loggedIn: true, loginAt: new Date().toISOString() };
+    localStorage.setItem('biz_auth_session', JSON.stringify(session));
+    this._showDashboard(session);
+
+    // Initialize the app after showing dashboard
+    if (typeof App !== 'undefined' && App.init) App.init();
+  },
+
+  _login(email, password, errorEl) {
+    const users = this._getUsers();
+    const user = users.find(u => u.email === email);
+    if (!user) {
+      errorEl.textContent = 'No account found with this email.';
+      return;
+    }
+    if (user.passwordHash !== this._hash(password)) {
+      errorEl.textContent = 'Incorrect password. Please try again.';
+      return;
+    }
+    const session = { email: user.email, name: user.name, loggedIn: true, loginAt: new Date().toISOString() };
+    localStorage.setItem('biz_auth_session', JSON.stringify(session));
+    this._showDashboard(session);
+
+    // Initialize the app after showing dashboard
+    if (typeof App !== 'undefined' && App.init) App.init();
+  },
+
+  logout() {
+    if (!confirm('Sign out of BizOps Dashboard?')) return;
+    localStorage.removeItem('biz_auth_session');
+    this._showLogin();
+    // Reset form
+    document.getElementById('login-email').value = '';
+    document.getElementById('login-password').value = '';
+    document.getElementById('login-name').value = '';
+    document.getElementById('login-error').textContent = '';
+    this.mode = 'login';
+    this.toggleMode(); // Reset to login mode visuals
+    this.toggleMode(); // Toggle back (sets to login)
+  },
+
+  getCurrentUser() {
+    const session = this._getSession();
+    return session ? { email: session.email, name: session.name } : null;
+  },
+};
+
 // ── Utilities ───────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
@@ -86,6 +273,11 @@ const App = {
     this.Documents.render();
     this.KPI.load();
     this.refreshBadges();
+    
+    // Initialize Projects
+    this.populateProjectDropdowns();
+    this.renderProjectsList();
+    
     switchPanel('profile');
 
     // PIN input auto-advance & keyboard nav
@@ -201,6 +393,72 @@ const App = {
     docsBadge.style.display = docsExpiring ? '' : 'none';
   },
 
+  // ── Projects / Sub-Businesses ─────────────────────────────
+  getProjects() { return load('projects', []); },
+  addProject() {
+    const input = $('new-project-name');
+    if (!input) return;
+    const name = input.value.trim();
+    if (!name) return;
+    const projects = this.getProjects();
+    if (projects.some(p => p.toLowerCase() === name.toLowerCase())) {
+      toast('Project already exists.', 'error'); return;
+    }
+    projects.push(name);
+    store('projects', projects);
+    input.value = '';
+    toast('Project added.');
+    this.populateProjectDropdowns();
+    this.renderProjectsList();
+  },
+  removeProject(name) {
+    if (!confirm(`Remove project "${name}"? Items assigned to it will remain but won't be filterable.`)) return;
+    const projects = this.getProjects().filter(p => p !== name);
+    store('projects', projects);
+    this.populateProjectDropdowns();
+    this.renderProjectsList();
+  },
+  renderProjectsList() {
+    const container = $('profile-projects-list');
+    if (!container) return;
+    const projects = this.getProjects();
+    if (projects.length === 0) {
+      container.innerHTML = '<span style="color:var(--text-muted);font-size:12px">No projects defined.</span>';
+      return;
+    }
+    container.innerHTML = projects.map(p => `
+      <div class="badge badge-blue" style="display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;background:rgba(59,130,246,0.1)">
+        ${p}
+        <button onclick="App.removeProject('${p.replace(/'/g, "\\'")}')" style="background:none;border:none;color:var(--red);cursor:pointer;font-size:10px;padding:0">&times;</button>
+      </div>
+    `).join('');
+  },
+  populateProjectDropdowns() {
+    const projects = this.getProjects();
+    const optionsHtml = '<option value="">General / Unassigned</option>' + 
+                         projects.map(p => `<option value="${p}">${p}</option>`).join('');
+    document.querySelectorAll('.project-dropdown').forEach(select => {
+      const currentVal = select.value;
+      select.innerHTML = optionsHtml;
+      if (currentVal && projects.includes(currentVal)) select.value = currentVal;
+    });
+
+    const filterOptionsHtml = '<option value="">All Projects</option><option value="unassigned">General / Unassigned</option>' + 
+                               projects.map(p => `<option value="${p}">${p}</option>`).join('');
+    document.querySelectorAll('.project-filter').forEach(select => {
+      if (select.id === 'kpi-project-select') {
+        const currentVal = select.value;
+        select.innerHTML = '<option value="">Overview (All / Global)</option>' + 
+                           projects.map(p => `<option value="${p}">${p}</option>`).join('');
+        if (currentVal && projects.includes(currentVal)) select.value = currentVal;
+        return;
+      }
+      const currentVal = select.value;
+      select.innerHTML = filterOptionsHtml;
+      if (currentVal && [...projects, 'unassigned'].includes(currentVal)) select.value = currentVal;
+    });
+  },
+
   // ── Business Profile ──────────────────────────────────────
   Profile: {
     data: {},
@@ -272,12 +530,14 @@ const App = {
           $('ar-issue-date').value= rec.issueDate;
           $('ar-due-date').value  = rec.dueDate;
           $('ar-notes').value     = rec.notes;
+          $('ar-project').value   = rec.project || '';
         }
       } else {
         ['ar-client','ar-inv-num','ar-amount','ar-notes'].forEach(i => $(i).value = '');
         $('ar-status').value     = 'Draft';
         $('ar-issue-date').value = today();
         $('ar-due-date').value   = '';
+        $('ar-project').value    = '';
         // Auto-generate invoice number
         const recs = load('ar', []);
         $('ar-inv-num').value = 'INV-' + String(recs.length + 1).padStart(3, '0');
@@ -298,6 +558,7 @@ const App = {
         issueDate: $('ar-issue-date').value,
         dueDate: $('ar-due-date').value,
         notes: $('ar-notes').value.trim(),
+        project: $('ar-project').value,
       };
       if (this.editId) {
         const idx = recs.findIndex(r => r.id === this.editId);
@@ -377,6 +638,7 @@ const App = {
           $('ap-status').value    = rec.status;
           $('ap-recurring').value = rec.recurring || '';
           $('ap-desc').value      = rec.desc;
+          $('ap-project').value   = rec.project || '';
         }
       } else {
         ['ap-vendor','ap-amount','ap-desc'].forEach(i => $(i).value = '');
@@ -384,6 +646,7 @@ const App = {
         $('ap-cat').value       = 'OpEx';
         $('ap-status').value    = 'Pending';
         $('ap-recurring').value = '';
+        $('ap-project').value   = '';
       }
       $('ap-edit-id').value = id || '';
       $('modal-ap').classList.add('open');
@@ -399,6 +662,7 @@ const App = {
         due: $('ap-due').value, cat: $('ap-cat').value,
         status: $('ap-status').value, recurring: $('ap-recurring').value,
         desc: $('ap-desc').value.trim(),
+        project: $('ap-project').value,
       };
       if (this.editId) { const idx = recs.findIndex(r => r.id === this.editId); if (idx > -1) recs[idx] = rec; }
       else recs.push(rec);
@@ -414,9 +678,12 @@ const App = {
       const search = ($('ap-search')?.value || '').toLowerCase();
       const filterCat = $('ap-filter-cat')?.value || '';
       const filterStatus = $('ap-filter-status')?.value || '';
+      const filterProj = $('ap-filter-project')?.value || '';
       if (search) recs = recs.filter(r => r.vendor.toLowerCase().includes(search));
       if (filterCat) recs = recs.filter(r => r.cat === filterCat);
       if (filterStatus) recs = recs.filter(r => r.status === filterStatus);
+      if (filterProj === 'unassigned') recs = recs.filter(r => !r.project);
+      else if (filterProj) recs = recs.filter(r => r.project === filterProj);
 
       const all = load('ap', []);
       const totalDue   = all.filter(r => r.status !== 'Paid').reduce((s, r) => s + +r.amount, 0);
@@ -436,7 +703,7 @@ const App = {
         const days = r.due ? daysUntil(r.due) : null;
         const countdown = days !== null && r.status !== 'Paid' ? `<span class="badge ${days < 0 ? 'badge-red' : days <= 7 ? 'badge-yellow' : 'badge-gray'}" style="margin-left:6px;font-size:10px">${days < 0 ? `${Math.abs(days)}d overdue` : `${days}d`}</span>` : '';
         return `<tr>
-          <td class="fw-700">${r.vendor}${r.recurring ? ` <span class="badge badge-purple" style="font-size:10px">🔁 ${r.recurring}</span>` : ''}</td>
+          <td class="fw-700">${r.vendor}${r.recurring ? ` <span class="badge badge-purple" style="font-size:10px">🔁 ${r.recurring}</span>` : ''}${r.project ? ` <span class="badge badge-blue" style="font-size:10px;margin-left:6px">${r.project}</span>` : ''}</td>
           <td class="td-muted">${r.desc || '—'}</td>
           <td class="fw-700">${fmt$(r.amount)}</td>
           <td>${fmtDate(r.due)}${countdown}</td>
@@ -480,18 +747,24 @@ const App = {
         $('eq-date').value = today();
         $('eq-status').value = 'Active';
         $('lic-status').value = 'Active';
+        if ($('eq-project')) $('eq-project').value = '';
+        if ($('lic-project')) $('lic-project').value = '';
+        if ($('hr-project')) $('hr-project').value = '';
       } else {
         const type = this.currentTab;
         const rec = load(type === 'licenses' ? 'assets_lic' : type === 'hr' ? 'assets_hr' : 'assets_eq', []).find(r => r.id === id);
         if (rec && type === 'equipment') {
           $('eq-name').value = rec.name; $('eq-cat').value = rec.cat; $('eq-serial').value = rec.serial;
           $('eq-assigned').value = rec.assigned; $('eq-date').value = rec.date; $('eq-value').value = rec.value; $('eq-status').value = rec.status;
+          $('eq-project').value = rec.project || '';
         } else if (rec && type === 'licenses') {
           $('lic-name').value = rec.name; $('lic-key').value = rec.key; $('lic-assigned').value = rec.assigned;
           $('lic-cost').value = rec.cost; $('lic-renewal').value = rec.renewal; $('lic-status').value = rec.status;
+          $('lic-project').value = rec.project || '';
         } else if (rec && type === 'hr') {
           $('hr-name').value = rec.name; $('hr-role').value = rec.role; $('hr-start').value = rec.start;
           $('hr-salary').value = rec.salary; $('hr-pay-sched').value = rec.paySchedule; $('hr-emergency').value = rec.emergency;
+          $('hr-project').value = rec.project || '';
         }
       }
       $('assets-edit-id').value = id || '';
@@ -511,18 +784,18 @@ const App = {
         const name = $('eq-name').value.trim();
         if (!name) { toast('Asset name is required.', 'error'); return; }
         key = 'assets_eq';
-        rec = { id, name, cat: $('eq-cat').value, serial: $('eq-serial').value.trim(), assigned: $('eq-assigned').value.trim(), date: $('eq-date').value, value: $('eq-value').value, status: $('eq-status').value };
+        rec = { id, name, cat: $('eq-cat').value, serial: $('eq-serial').value.trim(), assigned: $('eq-assigned').value.trim(), date: $('eq-date').value, value: $('eq-value').value, status: $('eq-status').value, project: $('eq-project').value };
       } else if (t === 'license') {
         const name = $('lic-name').value.trim();
         if (!name) { toast('Software name is required.', 'error'); return; }
         key = 'assets_lic';
-        rec = { id, name, key: $('lic-key').value.trim(), assigned: $('lic-assigned').value.trim(), cost: $('lic-cost').value, renewal: $('lic-renewal').value, status: $('lic-status').value };
+        rec = { id, name, key: $('lic-key').value.trim(), assigned: $('lic-assigned').value.trim(), cost: $('lic-cost').value, renewal: $('lic-renewal').value, status: $('lic-status').value, project: $('lic-project').value };
       } else {
         if (App.role !== 'admin') { toast('HR access is Admin only.', 'error'); return; }
         const name = $('hr-name').value.trim();
         if (!name) { toast('Employee name is required.', 'error'); return; }
         key = 'assets_hr';
-        rec = { id, name, role: $('hr-role').value.trim(), start: $('hr-start').value, salary: $('hr-salary').value, paySchedule: $('hr-pay-sched').value, emergency: $('hr-emergency').value.trim() };
+        rec = { id, name, role: $('hr-role').value.trim(), start: $('hr-start').value, salary: $('hr-salary').value, paySchedule: $('hr-pay-sched').value, emergency: $('hr-emergency').value.trim(), project: $('hr-project').value };
       }
       recs = load(key, []);
       if (this.editId) { const idx = recs.findIndex(r => r.id === this.editId); if (idx > -1) recs[idx] = rec; }
@@ -537,13 +810,25 @@ const App = {
       store(key, load(key, []).filter(r => r.id !== id)); this.render(); toast('Record deleted.');
     },
     render() {
-      const eq  = load('assets_eq', []);
-      const lic = load('assets_lic', []);
-      const hr  = load('assets_hr', []);
+      let eq  = load('assets_eq', []);
+      let lic = load('assets_lic', []);
+      let hr  = load('assets_hr', []);
+
+      const filterProj = $('assets-filter-project')?.value || '';
+      if (filterProj === 'unassigned') {
+        eq = eq.filter(r => !r.project);
+        lic = lic.filter(r => !r.project);
+        hr = hr.filter(r => !r.project);
+      } else if (filterProj) {
+        eq = eq.filter(r => r.project === filterProj);
+        lic = lic.filter(r => r.project === filterProj);
+        hr = hr.filter(r => r.project === filterProj);
+      }
+
       const statusBadge = s => ({ Active:'badge-green', 'In Repair':'badge-yellow', Retired:'badge-gray', Lost:'badge-red', Expired:'badge-red', Cancelled:'badge-red' }[s] || 'badge-gray');
 
       $('eq-tbody').innerHTML = eq.length ? eq.map(r => `<tr>
-        <td class="fw-700">${r.name}</td><td><span class="badge badge-blue">${r.cat}</span></td>
+        <td class="fw-700">${r.name}${r.project ? ` <span class="badge badge-blue" style="font-size:10px;margin-left:6px">${r.project}</span>` : ''}</td><td><span class="badge badge-blue">${r.cat}</span></td>
         <td class="td-muted">${r.serial||'—'}</td><td>${r.assigned||'—'}</td>
         <td class="td-muted">${fmtDate(r.date)}</td><td>${r.value ? fmt$(r.value) : '—'}</td>
         <td><span class="badge ${statusBadge(r.status)}">${r.status}</span></td>
@@ -553,7 +838,7 @@ const App = {
       $('lic-tbody').innerHTML = lic.length ? lic.map(r => {
         const days = r.renewal ? daysUntil(r.renewal) : null;
         return `<tr>
-          <td class="fw-700">${r.name}</td>
+          <td class="fw-700">${r.name}${r.project ? ` <span class="badge badge-blue" style="font-size:10px;margin-left:6px">${r.project}</span>` : ''}</td>
           <td class="td-muted" style="font-family:monospace">${r.key ? r.key.replace(/./g, (c,i) => i < r.key.length-4 ? '•' : c) : '—'}</td>
           <td>${r.assigned||'—'}</td>
           <td>${fmtDate(r.renewal)}${days !== null ? `<span class="badge ${days<0?'badge-red':days<=30?'badge-yellow':'badge-gray'}" style="margin-left:6px;font-size:10px">${days<0?`${Math.abs(days)}d ago`:`${days}d`}</span>` : ''}</td>
@@ -564,7 +849,7 @@ const App = {
       }).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">🔑</div><div class="empty-title">No licenses tracked</div><div class="empty-desc">Add your first software license.</div></div></td></tr>`;
 
       $('hr-tbody').innerHTML = hr.length ? hr.map(r => `<tr>
-        <td class="fw-700">${r.name}</td><td class="td-muted">${r.role||'—'}</td>
+        <td class="fw-700">${r.name}${r.project ? ` <span class="badge badge-blue" style="font-size:10px;margin-left:6px">${r.project}</span>` : ''}</td><td class="td-muted">${r.role||'—'}</td>
         <td class="td-muted">${fmtDate(r.start)}</td><td>${r.salary ? fmt$(r.salary)+'/yr' : '—'}</td>
         <td><span class="badge badge-blue">${r.paySchedule||'—'}</span></td>
         <td class="td-muted">${r.emergency||'—'}</td>
@@ -587,12 +872,14 @@ const App = {
           $('comp-due').value    = rec.due;
           $('comp-status').value = rec.status;
           $('comp-notes').value  = rec.notes;
+          $('comp-project').value = rec.project || '';
         }
       } else {
         ['comp-name','comp-notes'].forEach(i => $(i).value = '');
         $('comp-due').value    = '';
         $('comp-type').value   = 'Tax Filing';
         $('comp-status').value = 'pending';
+        $('comp-project').value = '';
       }
       $('comp-edit-id').value = id || '';
       $('modal-compliance').classList.add('open');
@@ -602,7 +889,7 @@ const App = {
       const due  = $('comp-due').value;
       if (!name || !due) { toast('Name and due date are required.', 'error'); return; }
       const recs = load('compliance', []);
-      const rec  = { id: this.editId || uid(), name, type: $('comp-type').value, due, status: $('comp-status').value, notes: $('comp-notes').value.trim() };
+      const rec  = { id: this.editId || uid(), name, type: $('comp-type').value, due, status: $('comp-status').value, notes: $('comp-notes').value.trim(), project: $('comp-project').value };
       if (this.editId) { const idx = recs.findIndex(r => r.id === this.editId); if (idx > -1) recs[idx] = rec; }
       else recs.push(rec);
       store('compliance', recs); App.closeModal('modal-compliance'); this.render(); App.refreshBadges();
@@ -619,6 +906,10 @@ const App = {
     render() {
       let recs = load('compliance', []).sort((a, b) => new Date(a.due) - new Date(b.due));
       const filter = $('comp-filter')?.value || '';
+      const filterProj = $('comp-filter-project')?.value || '';
+
+      if (filterProj === 'unassigned') recs = recs.filter(r => !r.project);
+      else if (filterProj) recs = recs.filter(r => r.project === filterProj);
 
       const overdue  = recs.filter(r => r.status !== 'done' && daysUntil(r.due) < 0).length;
       const upcoming = recs.filter(r => r.status !== 'done' && daysUntil(r.due) >= 0 && daysUntil(r.due) <= 30).length;
@@ -651,7 +942,7 @@ const App = {
           <div class="timeline-dot ${dotClass}"></div>
           <div style="flex:1">
             <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-              <strong>${r.name}</strong>
+              <strong>${r.name}${r.project ? ` <span class="badge badge-blue" style="font-size:10px;margin-left:6px">${r.project}</span>` : ''}</strong>
               <span class="badge badge-gray" style="font-size:10px">${r.type}</span>
               ${badge}
             </div>
@@ -685,13 +976,15 @@ const App = {
           $('doc-status').value       = rec.status;
           $('doc-jurisdiction').value = rec.jurisdiction || '';
           $('doc-notes').value        = rec.notes || '';
+          $('doc-project').value      = rec.project || '';
         }
       } else {
         ['doc-name','doc-entity','doc-ref','doc-jurisdiction','doc-notes'].forEach(i => $(i).value = '');
         $('doc-type').value       = 'Secretary of State';
-        $('doc-effective').value   = today();
-        $('doc-expiration').value  = '';
-        $('doc-status').value      = 'Active';
+        $('doc-effective').value  = today();
+        $('doc-expiration').value = '';
+        $('doc-status').value     = 'Active';
+        $('doc-project').value    = '';
       }
       $('doc-edit-id').value = id || '';
       $('modal-documents').classList.add('open');
@@ -711,6 +1004,7 @@ const App = {
         status:       $('doc-status').value,
         jurisdiction: $('doc-jurisdiction').value.trim(),
         notes:        $('doc-notes').value.trim(),
+        project:      $('doc-project').value,
       };
       if (this.editId) {
         const idx = recs.findIndex(r => r.id === this.editId);
@@ -735,9 +1029,13 @@ const App = {
       const search       = ($('docs-search')?.value || '').toLowerCase();
       const filterType   = $('docs-filter-type')?.value || '';
       const filterStatus = $('docs-filter-status')?.value || '';
+      const filterProj   = $('docs-filter-project')?.value || '';
+      
       if (search)       recs = recs.filter(r => r.name.toLowerCase().includes(search) || (r.entity || '').toLowerCase().includes(search) || (r.ref || '').toLowerCase().includes(search));
       if (filterType)   recs = recs.filter(r => r.type === filterType);
       if (filterStatus) recs = recs.filter(r => r.status === filterStatus);
+      if (filterProj === 'unassigned') recs = recs.filter(r => !r.project);
+      else if (filterProj) recs = recs.filter(r => r.project === filterProj);
 
       // Stats
       const all      = load('documents', []);
@@ -766,7 +1064,7 @@ const App = {
         const days = r.expiration ? daysUntil(r.expiration) : null;
         const countdown = days !== null && r.status !== 'Archived' ? `<span class="badge ${days < 0 ? 'badge-red' : days <= 30 ? 'badge-yellow' : 'badge-gray'}" style="margin-left:6px;font-size:10px">${days < 0 ? `${Math.abs(days)}d expired` : `${days}d left`}</span>` : '';
         return `<tr>
-          <td class="fw-700">${r.name}${r.ref ? ` <span class="badge badge-gray" style="font-size:10px">#${r.ref}</span>` : ''}</td>
+          <td class="fw-700">${r.name}${r.ref ? ` <span class="badge badge-gray" style="font-size:10px">#${r.ref}</span>` : ''}${r.project ? ` <span class="badge badge-blue" style="font-size:10px;margin-left:6px">${r.project}</span>` : ''}</td>
           <td><span class="badge ${typeBadge(r.type)}">${r.type}</span></td>
           <td>${r.entity || '—'}</td>
           <td class="td-muted">${fmtDate(r.effective)}</td>
@@ -787,21 +1085,27 @@ const App = {
   KPI: {
     charts: {},
     load() {
-      const cur = load('kpi_current', {});
-      if (cur.revenue)  $('kpi-revenue').value  = cur.revenue;
-      if (cur.mrr)      $('kpi-mrr').value       = cur.mrr;
-      if (cur.expenses) $('kpi-expenses').value  = cur.expenses;
-      if (cur.burn)     $('kpi-burn').value       = cur.burn;
+      const p = $('kpi-project-select')?.value || '';
+      const map = load('kpi_current_map', { '': load('kpi_current', {}) });
+      const cur = map[p] || { revenue: '', mrr: '', expenses: '', burn: '' };
+      $('kpi-revenue').value  = cur.revenue !== undefined ? cur.revenue : '';
+      $('kpi-mrr').value       = cur.mrr !== undefined ? cur.mrr : '';
+      $('kpi-expenses').value  = cur.expenses !== undefined ? cur.expenses : '';
+      $('kpi-burn').value       = cur.burn !== undefined ? cur.burn : '';
       this.updateLive();
     },
     updateLive() {
+      const p = $('kpi-project-select')?.value || '';
       const rev  = parseFloat($('kpi-revenue').value)  || 0;
       const mrr  = parseFloat($('kpi-mrr').value)       || 0;
       const exp  = parseFloat($('kpi-expenses').value)  || 0;
       const burn = parseFloat($('kpi-burn').value)       || 0;
       const net  = rev - exp;
       const margin = rev > 0 ? ((net / rev) * 100).toFixed(1) : 0;
-      store('kpi_current', { revenue: rev, mrr, expenses: exp, burn });
+      
+      const map = load('kpi_current_map', { '': load('kpi_current', {}) });
+      map[p] = { revenue: rev, mrr, expenses: exp, burn };
+      store('kpi_current_map', map);
       $('kpi-stats').innerHTML = `
         <div class="stat-card"><div class="stat-label">Net Profit</div><div class="stat-value ${net>=0?'text-green':'text-red'}">${fmt$(net)}</div></div>
         <div class="stat-card"><div class="stat-label">Profit Margin</div><div class="stat-value ${net>=0?'text-green':'text-red'}">${margin}%</div></div>
@@ -814,27 +1118,33 @@ const App = {
       const mrr  = parseFloat($('kpi-mrr').value)       || 0;
       const exp  = parseFloat($('kpi-expenses').value)  || 0;
       const burn = parseFloat($('kpi-burn').value)       || 0;
+      const p = $('kpi-project-select')?.value || '';
       const history = load('kpi_history', []);
       const month = new Date().toLocaleString('en-US', { month: 'short', year: 'numeric' });
-      history.push({ month, revenue: rev, mrr, expenses: exp, burn, net: rev - exp, margin: rev > 0 ? +((rev-exp)/rev*100).toFixed(1) : 0, ts: Date.now() });
+      history.push({ project: p, month, revenue: rev, mrr, expenses: exp, burn, net: rev - exp, margin: rev > 0 ? +((rev-exp)/rev*100).toFixed(1) : 0, ts: Date.now() });
       store('kpi_history', history);
       this.renderHistory(); this.updateCharts();
       toast('Monthly snapshot saved! 📸');
     },
     renderHistory() {
-      const history = load('kpi_history', []).slice().reverse();
-      $('kpi-history-tbody').innerHTML = history.length ? history.map((r, i) => `<tr>
+      const p = $('kpi-project-select')?.value || '';
+      let history = load('kpi_history', []).reverse();
+      history = history.filter(r => (r.project || '') === p);
+
+      $('kpi-history-tbody').innerHTML = history.length ? history.map((r) => `<tr>
         <td class="fw-700">${r.month}</td>
         <td>${fmt$(r.revenue)}</td><td class="text-green">${fmt$(r.mrr)}</td>
         <td>${fmt$(r.expenses)}</td><td class="text-red">${fmt$(r.burn)}</td>
         <td class="${r.net>=0?'text-green':'text-red'} fw-700">${fmt$(r.net)}</td>
         <td><span class="badge ${r.margin>=0?'badge-green':'badge-red'}">${r.margin}%</span></td>
-        <td><button class="btn-icon" onclick="App.KPI.deleteSnap(${history.length-1-i})">🗑️</button></td>
+        <td><button class="btn-icon" onclick="App.KPI.deleteSnap(${r.ts})">🗑️</button></td>
       </tr>`).join('') : `<tr><td colspan="8"><div class="empty-state" style="padding:20px"><div class="empty-desc">No snapshots yet. Save this month to begin tracking trends.</div></div></td></tr>`;
     },
-    deleteSnap(idx) {
+    deleteSnap(ts) {
       if (!confirm('Delete this snapshot?')) return;
-      const h = load('kpi_history', []); h.splice(idx, 1); store('kpi_history', h);
+      let h = load('kpi_history', []);
+      h = h.filter(r => r.ts !== ts);
+      store('kpi_history', h);
       this.renderHistory(); this.updateCharts(); toast('Snapshot deleted.');
     },
     initCharts() {
@@ -853,7 +1163,9 @@ const App = {
       this.charts.burn    = new Chart(ctx2, { type: 'bar',  data: this.getBurnData(),    options: { ...chartDefaults, borderRadius: 6 } });
     },
     getRevenueData() {
-      const h = load('kpi_history', []).slice(-12);
+      const p = $('kpi-project-select')?.value || '';
+      let h = load('kpi_history', []);
+      h = h.filter(r => (r.project || '') === p).slice(-12);
       return {
         labels: h.map(r => r.month),
         datasets: [
@@ -863,7 +1175,9 @@ const App = {
       };
     },
     getBurnData() {
-      const h = load('kpi_history', []).slice(-12);
+      const p = $('kpi-project-select')?.value || '';
+      let h = load('kpi_history', []);
+      h = h.filter(r => (r.project || '') === p).slice(-12);
       return {
         labels: h.map(r => r.month),
         datasets: [
@@ -898,4 +1212,10 @@ App.saveProfile = function() {
   toast('Profile saved.');
 };
 
-document.addEventListener('DOMContentLoaded', () => App.init());
+document.addEventListener('DOMContentLoaded', () => {
+  Auth.init();
+  // Only boot dashboard if already logged in
+  if (Auth._getSession()) {
+    App.init();
+  }
+});

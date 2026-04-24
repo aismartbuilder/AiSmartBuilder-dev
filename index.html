@@ -9,7 +9,73 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 </head>
 <body>
-<div id="app">
+
+<!-- ── Login Screen ──────────────────────────────────────── -->
+<div id="login-screen">
+  <div class="login-bg-shapes">
+    <div class="login-shape login-shape-1"></div>
+    <div class="login-shape login-shape-2"></div>
+    <div class="login-shape login-shape-3"></div>
+  </div>
+  <div class="login-card" id="login-card">
+    <div class="login-logo">
+      <div class="login-logo-icon">🏢</div>
+      <div class="login-logo-text">
+        <span class="login-brand">BizOps</span>
+        <span class="login-brand-sub">Dashboard</span>
+      </div>
+    </div>
+    <h1 class="login-heading" id="login-heading">Welcome back</h1>
+    <p class="login-subheading" id="login-subheading">Sign in to your operations center</p>
+
+    <form id="login-form" onsubmit="Auth.handleSubmit(event)" autocomplete="on">
+      <!-- Full Name (register only) -->
+      <div class="login-field" id="login-name-field" style="display:none">
+        <label class="login-label" for="login-name">Full Name</label>
+        <div class="login-input-wrap">
+          <span class="login-input-icon">👤</span>
+          <input class="login-input" id="login-name" type="text" placeholder="John Doe" autocomplete="name" />
+        </div>
+      </div>
+
+      <div class="login-field">
+        <label class="login-label" for="login-email">Email Address</label>
+        <div class="login-input-wrap">
+          <span class="login-input-icon">✉️</span>
+          <input class="login-input" id="login-email" type="email" placeholder="you@company.com" autocomplete="email" required />
+        </div>
+      </div>
+
+      <div class="login-field">
+        <label class="login-label" for="login-password">Password</label>
+        <div class="login-input-wrap">
+          <span class="login-input-icon">🔒</span>
+          <input class="login-input" id="login-password" type="password" placeholder="••••••••" autocomplete="current-password" required minlength="4" />
+          <button type="button" class="login-eye-btn" id="login-eye-btn" onclick="Auth.togglePasswordVisibility()" title="Show password">👁️</button>
+        </div>
+      </div>
+
+      <div id="login-error" class="login-error"></div>
+
+      <button type="submit" class="login-submit-btn" id="login-submit-btn">
+        <span id="login-btn-text">Sign In</span>
+        <span id="login-btn-spinner" class="login-spinner" style="display:none"></span>
+      </button>
+    </form>
+
+    <div class="login-divider">
+      <span>or</span>
+    </div>
+
+    <p class="login-toggle-text">
+      <span id="login-toggle-label">Don't have an account?</span>
+      <button type="button" class="login-toggle-btn" id="login-toggle-btn" onclick="Auth.toggleMode()">Create one</button>
+    </p>
+  </div>
+  <p class="login-footer-text">Secured with local encryption · All data stays on your device</p>
+</div>
+
+<div id="app" style="display:none">
 
   <!-- ── Sidebar ──────────────────────────────────────────── -->
   <aside id="sidebar">
@@ -66,6 +132,10 @@
           <button class="role-pill" id="role-manager" onclick="App.setRole('manager')">Manager</button>
         </div>
       </div>
+      <button class="sidebar-logout-btn" id="sidebar-logout-btn" onclick="Auth.logout()">
+        <span>🚪</span>
+        <span>Sign Out</span>
+      </button>
     </div>
   </aside>
 
@@ -143,6 +213,28 @@
           </div>
         </div>
 
+        <!-- Projects / Sub-Businesses Info -->
+        <div class="card mt-16" id="profile-projects-card">
+          <div class="card-header">
+            <div class="card-title">📁 Projects &amp; Sub-Businesses</div>
+          </div>
+          <div style="display:flex;flex-direction:column;gap:16px">
+            <div style="font-size:13px;color:var(--text-secondary)">Define sub-businesses or ongoing projects to organize your operations across all modules.</div>
+            <div class="form-grid-2" style="max-width:420px; align-items:end;">
+              <div class="form-group" style="margin-bottom:0">
+                <label class="form-label">New Project Name</label>
+                <input class="form-input" id="new-project-name" type="text" placeholder="e.g., Downtown Expansion" />
+              </div>
+              <div style="margin-bottom:0;">
+                <button class="btn btn-secondary btn-sm" onclick="App.Profile.addProject()" style="height:41px">+ Add Project</button>
+              </div>
+            </div>
+            <div id="profile-projects-list" style="display:flex; gap:8px; flex-wrap:wrap; margin-top:8px;">
+              <!-- project badges will render here -->
+            </div>
+          </div>
+        </div>
+
         <!-- Bank / Financial Info -->
         <div class="card mt-16 admin-only" id="profile-bank-card">
           <div class="card-header">
@@ -200,6 +292,10 @@
         <!-- Filter Bar -->
         <div class="filter-bar">
           <input class="form-input" type="text" id="ar-search" placeholder="Search client or invoice…" oninput="App.AR.render()" />
+          <select class="form-select project-filter" id="ar-filter-project" onchange="App.AR.render()">
+            <option value="">All Projects</option>
+            <option value="unassigned">General / Unassigned</option>
+          </select>
           <select class="form-select" id="ar-filter-status" onchange="App.AR.render()">
             <option value="">All Statuses</option>
             <option value="Draft">Draft</option>
@@ -214,7 +310,7 @@
             <thead>
               <tr>
                 <th>Invoice #</th>
-                <th>Client</th>
+                <th>Client / Project</th>
                 <th>Amount</th>
                 <th>Issue Date</th>
                 <th>Due Date</th>
@@ -247,6 +343,10 @@
         <!-- Filter Bar -->
         <div class="filter-bar">
           <input class="form-input" type="text" id="ap-search" placeholder="Search vendor or bill…" oninput="App.AP.render()" />
+          <select class="form-select project-filter" id="ap-filter-project" onchange="App.AP.render()">
+            <option value="">All Projects</option>
+            <option value="unassigned">General / Unassigned</option>
+          </select>
           <select class="form-select" id="ap-filter-cat" onchange="App.AP.render()">
             <option value="">All Categories</option>
             <option value="OpEx">OpEx</option>
@@ -267,7 +367,7 @@
           <table id="ap-table">
             <thead>
               <tr>
-                <th>Vendor</th>
+                <th>Vendor / Project</th>
                 <th>Description</th>
                 <th>Amount</th>
                 <th>Due Date</th>
@@ -298,13 +398,21 @@
           </div>
         </div>
 
+        <!-- Assets Filter Bar -->
+        <div class="filter-bar" style="margin-bottom:20px">
+          <select class="form-select project-filter" id="assets-filter-project" onchange="App.Assets.render()" style="max-width:280px">
+            <option value="">All Projects</option>
+            <option value="unassigned">General / Unassigned</option>
+          </select>
+        </div>
+
         <!-- Equipment Sub-panel -->
         <div id="assets-equipment">
           <div class="table-wrap">
             <table>
               <thead>
                 <tr>
-                  <th>Asset Name</th>
+                  <th>Asset Name / Project</th>
                   <th>Category</th>
                   <th>Serial #</th>
                   <th>Assigned To</th>
@@ -325,7 +433,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Tool / Software</th>
+                  <th>Tool / Project</th>
                   <th>License Key</th>
                   <th>Assigned To</th>
                   <th>Renewal Date</th>
@@ -345,7 +453,7 @@
             <table>
               <thead>
                 <tr>
-                  <th>Name</th>
+                  <th>Name / Project</th>
                   <th>Role / Title</th>
                   <th>Start Date</th>
                   <th>Salary</th>
@@ -379,6 +487,10 @@
 
         <!-- Filter -->
         <div class="filter-bar">
+          <select class="form-select project-filter" id="comp-filter-project" onchange="App.Compliance.render()">
+            <option value="">All Projects</option>
+            <option value="unassigned">General / Unassigned</option>
+          </select>
           <select class="form-select" id="comp-filter" onchange="App.Compliance.render()">
             <option value="">All Items</option>
             <option value="overdue">Overdue</option>
@@ -408,6 +520,11 @@
         </div>
 
         <!-- KPI Inputs -->
+        <div class="filter-bar" style="margin-bottom:16px">
+          <select class="form-select project-filter" id="kpi-project-select" onchange="App.KPI.load()" style="max-width:280px">
+            <option value="">Overview (All / Global)</option>
+          </select>
+        </div>
         <div class="kpi-input-row" id="kpi-inputs">
           <div class="kpi-input-card">
             <label>Monthly Revenue ($)</label>
@@ -495,6 +612,10 @@
         <!-- Filter Bar -->
         <div class="filter-bar">
           <input class="form-input" type="text" id="docs-search" placeholder="Search documents…" oninput="App.Documents.render()" />
+          <select class="form-select project-filter" id="docs-filter-project" onchange="App.Documents.render()">
+            <option value="">All Projects</option>
+            <option value="unassigned">General / Unassigned</option>
+          </select>
           <select class="form-select" id="docs-filter-type" onchange="App.Documents.render()">
             <option value="">All Types</option>
             <option value="Secretary of State">Secretary of State</option>
@@ -524,7 +645,7 @@
           <table id="docs-table">
             <thead>
               <tr>
-                <th>Document Name</th>
+                <th>Document Name / Project</th>
                 <th>Type</th>
                 <th>Entity / Signer</th>
                 <th>Effective Date</th>
@@ -665,6 +786,10 @@
         <label class="form-label">Due Date</label>
         <input class="form-input" id="ar-due-date" type="date" />
       </div>
+      <div class="form-group">
+        <label class="form-label">Project / Sub-business</label>
+        <select class="form-select project-dropdown" id="ar-project"></select>
+      </div>
     </div>
     <div class="form-group">
       <label class="form-label">Description / Notes</label>
@@ -718,6 +843,10 @@
           <option value="Monthly">Monthly</option><option value="Annual">Annual</option>
           <option value="Quarterly">Quarterly</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Project / Sub-business</label>
+        <select class="form-select project-dropdown" id="ap-project"></select>
       </div>
     </div>
     <div class="form-group">
@@ -778,6 +907,10 @@
           <label class="form-label">Purchase Value ($)</label>
           <input class="form-input" id="eq-value" type="number" placeholder="0.00" />
         </div>
+        <div class="form-group">
+          <label class="form-label">Project / Sub-business</label>
+          <select class="form-select project-dropdown" id="eq-project"></select>
+        </div>
       </div>
       <div class="form-group">
         <label class="form-label">Condition / Status</label>
@@ -816,6 +949,10 @@
             <option>Active</option><option>Expired</option><option>Cancelled</option>
           </select>
         </div>
+        <div class="form-group">
+          <label class="form-label">Project / Sub-business</label>
+          <select class="form-select project-dropdown" id="lic-project"></select>
+        </div>
       </div>
     </div>
 
@@ -847,6 +984,10 @@
         <div class="form-group">
           <label class="form-label">Emergency Contact</label>
           <input class="form-input" id="hr-emergency" type="text" placeholder="Name — Phone" />
+        </div>
+        <div class="form-group">
+          <label class="form-label">Project / Sub-business</label>
+          <select class="form-select project-dropdown" id="hr-project"></select>
         </div>
       </div>
     </div>
@@ -888,6 +1029,10 @@
           <option value="pending">Pending</option>
           <option value="done">Completed</option>
         </select>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Project / Sub-business</label>
+        <select class="form-select project-dropdown" id="comp-project"></select>
       </div>
     </div>
     <div class="form-group">
@@ -960,6 +1105,10 @@
       <div class="form-group">
         <label class="form-label">Filing State / Jurisdiction</label>
         <input class="form-input" id="doc-jurisdiction" type="text" placeholder="California" />
+      </div>
+      <div class="form-group">
+        <label class="form-label">Project / Sub-business</label>
+        <select class="form-select project-dropdown" id="doc-project"></select>
       </div>
     </div>
     <div class="form-group">
