@@ -333,10 +333,13 @@
             <div class="section-desc">Vendor bills, subscriptions, and tax-deductible expenses</div>
           </div>
           <div class="section-actions">
-            <button class="btn btn-primary" onclick="App.AP.openModal()">+ New Bill</button>
+            <button class="btn btn-secondary btn-sm" id="ap-tab-btn-bills" onclick="App.AP.switchTab('bills')" style="border-color:var(--accent);color:var(--accent-light)">💸 Bills</button>
+            <button class="btn btn-secondary btn-sm" id="ap-tab-btn-statements" onclick="App.AP.switchTab('statements')">📁 Bank Statements</button>
+            <button class="btn btn-primary" id="ap-new-bill-btn" onclick="App.AP.openModal()">+ New Bill</button>
           </div>
         </div>
 
+        <div id="ap-bills">
         <!-- AP Stats -->
         <div class="stats-row" id="ap-stats"></div>
 
@@ -378,6 +381,36 @@
             </thead>
             <tbody id="ap-tbody"></tbody>
           </table>
+        </div>
+        </div><!-- #ap-bills -->
+
+        <!-- Bank Statements Sub-panel -->
+        <div id="ap-statements" style="display:none">
+          <div class="card">
+            <div class="card-header">
+              <div class="card-title">📁 Monthly Bank Statements</div>
+              <div>
+                <input type="file" id="statement-upload" style="display:none" accept=".pdf,.png,.jpg,.jpeg" onchange="App.AP.uploadStatement(event)" />
+                <button class="btn btn-primary btn-sm" onclick="document.getElementById('statement-upload').click()">+ Upload Statement</button>
+              </div>
+            </div>
+            <div style="padding:16px 20px; font-size:13px; color:var(--text-secondary); border-bottom:1px solid var(--border)">
+              Upload your monthly bank statements to maintain a clear record of payments made.
+            </div>
+            <div class="table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Statement Name</th>
+                    <th>Upload Date</th>
+                    <th>File Size</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="ap-statements-tbody"></tbody>
+              </table>
+            </div>
+          </div>
         </div>
       </section>
 
