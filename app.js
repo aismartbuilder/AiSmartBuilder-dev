@@ -219,7 +219,7 @@ const PANELS = {
   assets:     { title: 'Assets & HR',         sub: 'Equipment · Licenses · Payroll · Personnel' },
   compliance: { title: 'Compliance Calendar', sub: 'Regulatory filings · Tax deadlines · Insurance' },
   kpi:        { title: 'KPI Dashboard',       sub: 'Revenue · MRR · Burn rate · Profit margin' },
-  documents:  { title: 'Documents',           sub: 'Legal filings · Operating agreements · Contracts' },
+  calendar:   { title: 'Calendar',            sub: 'Meetings · Parties met with · Schedules' },
 };
 
 function switchPanel(name) {
@@ -270,7 +270,7 @@ const App = {
     this.AP.render();
     this.Assets.render();
     this.Compliance.render();
-    this.Documents.render();
+    this.Calendar.render();
     this.KPI.load();
     this.refreshBadges();
     
@@ -362,7 +362,7 @@ const App = {
   },
 
   openAddModal() {
-    const map = { profile: () => App.openProfileModal(), ar: () => App.AR.openModal(), ap: () => App.AP.openModal(), assets: () => App.Assets.openModal(), compliance: () => App.Compliance.openModal(), documents: () => App.Documents.openModal(), kpi: () => App.KPI.saveSnapshot() };
+    const map = { profile: () => App.openProfileModal(), ar: () => App.AR.openModal(), ap: () => App.AP.openModal(), assets: () => App.Assets.openModal(), compliance: () => App.Compliance.openModal(), kpi: () => App.KPI.saveSnapshot() };
     (map[this.currentPanel] || (() => {}))();
   },
 
@@ -386,11 +386,6 @@ const App = {
     const compBadge = $('comp-badge');
     compBadge.textContent = compUrgent;
     compBadge.style.display = compUrgent ? '' : 'none';
-    // Documents expiring badge
-    const docsExpiring = load('documents', []).filter(r => r.status === 'Expired' || r.status === 'Expiring Soon' || (r.expiration && r.status !== 'Archived' && daysUntil(r.expiration) <= 30 && daysUntil(r.expiration) >= 0)).length;
-    const docsBadge = $('docs-badge');
-    docsBadge.textContent = docsExpiring;
-    docsBadge.style.display = docsExpiring ? '' : 'none';
   },
 
   // ── Projects / Sub-Businesses ─────────────────────────────
@@ -588,11 +583,41 @@ const App = {
       let recs = load('ar', []);
       const search = ($('ar-search')?.value || '').toLowerCase();
       const filterStatus = $('ar-filter-status')?.value || '';
+      const filterProject = $('ar-filter-project')?.value || '';
+      const filterClient = $('ar-filter-client')?.value || '';
+      const filterMonth = $('ar-filter-month')?.value || '';
+
       if (search) recs = recs.filter(r => r.client.toLowerCase().includes(search) || r.invNum.toLowerCase().includes(search));
       if (filterStatus) recs = recs.filter(r => r.status === filterStatus);
+      if (filterProject === 'unassigned') recs = recs.filter(r => !r.project);
+      else if (filterProject) recs = recs.filter(r => r.project === filterProject);
+      if (filterClient) recs = recs.filter(r => r.client === filterClient);
+      if (filterMonth) recs = recs.filter(r => (r.issueDate && r.issueDate.startsWith(filterMonth)) || (r.dueDate && r.dueDate.startsWith(filterMonth)));
 
       // Stats
       const all = load('ar', []);
+
+      // Populate Client dropdown
+      const clientsList = [...new Set(all.map(r => r.client).filter(Boolean))].sort();
+      const clientSelect = $('ar-filter-client');
+      if (clientSelect) {
+        const currentClient = clientSelect.value;
+        clientSelect.innerHTML = '<option value="">All Clients</option>' + clientsList.map(c => `<option value="${c}">${c}</option>`).join('');
+        if (clientsList.includes(currentClient)) clientSelect.value = currentClient;
+      }
+
+      // Populate Month dropdown
+      const arMonths = [...new Set(all.flatMap(r => [r.issueDate?.substring(0, 7), r.dueDate?.substring(0, 7)]).filter(Boolean))].sort().reverse();
+      const arMonthSelect = $('ar-filter-month');
+      if (arMonthSelect) {
+        const currentMonth = arMonthSelect.value;
+        arMonthSelect.innerHTML = '<option value="">All Months</option>' + arMonths.map(m => {
+          const d = new Date(m + '-02');
+          return `<option value="${m}">${d.toLocaleString('default', { month: 'short', year: 'numeric' })}</option>`;
+        }).join('');
+        if (arMonths.includes(currentMonth)) arMonthSelect.value = currentMonth;
+      }
+
       const totalAR = all.reduce((s, r) => s + (r.status !== 'Paid' ? +r.amount : 0), 0);
       const totalPaid = all.reduce((s, r) => s + (r.status === 'Paid' ? +r.amount : 0), 0);
       const overdue = all.filter(r => r.status === 'Overdue').length;
@@ -739,13 +764,40 @@ const App = {
       const filterCat = $('ap-filter-cat')?.value || '';
       const filterStatus = $('ap-filter-status')?.value || '';
       const filterProj = $('ap-filter-project')?.value || '';
+      const filterVendor = $('ap-filter-vendor')?.value || '';
+      const filterMonth = $('ap-filter-month')?.value || '';
+
       if (search) recs = recs.filter(r => r.vendor.toLowerCase().includes(search));
       if (filterCat) recs = recs.filter(r => r.cat === filterCat);
       if (filterStatus) recs = recs.filter(r => r.status === filterStatus);
       if (filterProj === 'unassigned') recs = recs.filter(r => !r.project);
       else if (filterProj) recs = recs.filter(r => r.project === filterProj);
+      if (filterVendor) recs = recs.filter(r => r.vendor === filterVendor);
+      if (filterMonth) recs = recs.filter(r => r.due && r.due.startsWith(filterMonth));
 
       const all = load('ap', []);
+
+      // Populate Vendor dropdown
+      const vendorsList = [...new Set(all.map(r => r.vendor).filter(Boolean))].sort();
+      const vendorSelect = $('ap-filter-vendor');
+      if (vendorSelect) {
+        const currentVendor = vendorSelect.value;
+        vendorSelect.innerHTML = '<option value="">All Vendors</option>' + vendorsList.map(v => `<option value="${v}">${v}</option>`).join('');
+        if (vendorsList.includes(currentVendor)) vendorSelect.value = currentVendor;
+      }
+
+      // Populate Month dropdown
+      const apMonths = [...new Set(all.map(r => r.due?.substring(0, 7)).filter(Boolean))].sort().reverse();
+      const apMonthSelect = $('ap-filter-month');
+      if (apMonthSelect) {
+        const currentMonth = apMonthSelect.value;
+        apMonthSelect.innerHTML = '<option value="">All Months</option>' + apMonths.map(m => {
+          const d = new Date(m + '-02');
+          return `<option value="${m}">${d.toLocaleString('default', { month: 'short', year: 'numeric' })}</option>`;
+        }).join('');
+        if (apMonths.includes(currentMonth)) apMonthSelect.value = currentMonth;
+      }
+
       const totalDue   = all.filter(r => r.status !== 'Paid').reduce((s, r) => s + +r.amount, 0);
       const totalPaid  = all.filter(r => r.status === 'Paid').reduce((s, r) => s + +r.amount, 0);
       const overdue    = all.filter(r => r.status === 'Overdue').length;
@@ -1018,128 +1070,6 @@ const App = {
     },
   },
 
-  // ── Documents ─────────────────────────────────────────────
-  Documents: {
-    editId: null,
-    openModal(id) {
-      this.editId = id || null;
-      $('docs-modal-title').textContent = id ? '✏️ Edit Document' : '📄 Add Document';
-      if (id) {
-        const rec = load('documents', []).find(r => r.id === id);
-        if (rec) {
-          $('doc-name').value         = rec.name;
-          $('doc-type').value         = rec.type;
-          $('doc-entity').value       = rec.entity || '';
-          $('doc-ref').value          = rec.ref || '';
-          $('doc-effective').value    = rec.effective || '';
-          $('doc-expiration').value   = rec.expiration || '';
-          $('doc-status').value       = rec.status;
-          $('doc-jurisdiction').value = rec.jurisdiction || '';
-          $('doc-notes').value        = rec.notes || '';
-          $('doc-project').value      = rec.project || '';
-        }
-      } else {
-        ['doc-name','doc-entity','doc-ref','doc-jurisdiction','doc-notes'].forEach(i => $(i).value = '');
-        $('doc-type').value       = 'Secretary of State';
-        $('doc-effective').value  = today();
-        $('doc-expiration').value = '';
-        $('doc-status').value     = 'Active';
-        $('doc-project').value    = '';
-      }
-      $('doc-edit-id').value = id || '';
-      $('modal-documents').classList.add('open');
-    },
-    save() {
-      const name = $('doc-name').value.trim();
-      if (!name) { toast('Document name is required.', 'error'); return; }
-      const recs = load('documents', []);
-      const rec = {
-        id: this.editId || uid(),
-        name,
-        type:         $('doc-type').value,
-        entity:       $('doc-entity').value.trim(),
-        ref:          $('doc-ref').value.trim(),
-        effective:    $('doc-effective').value,
-        expiration:   $('doc-expiration').value,
-        status:       $('doc-status').value,
-        jurisdiction: $('doc-jurisdiction').value.trim(),
-        notes:        $('doc-notes').value.trim(),
-        project:      $('doc-project').value,
-      };
-      if (this.editId) {
-        const idx = recs.findIndex(r => r.id === this.editId);
-        if (idx > -1) recs[idx] = rec;
-      } else {
-        recs.push(rec);
-      }
-      store('documents', recs);
-      App.closeModal('modal-documents');
-      this.render();
-      App.refreshBadges();
-      toast(this.editId ? 'Document updated.' : 'Document added.');
-      this.editId = null;
-    },
-    delete(id) {
-      if (!confirm('Delete this document?')) return;
-      store('documents', load('documents', []).filter(r => r.id !== id));
-      this.render(); App.refreshBadges(); toast('Document deleted.');
-    },
-    render() {
-      let recs = load('documents', []);
-      const search       = ($('docs-search')?.value || '').toLowerCase();
-      const filterType   = $('docs-filter-type')?.value || '';
-      const filterStatus = $('docs-filter-status')?.value || '';
-      const filterProj   = $('docs-filter-project')?.value || '';
-      
-      if (search)       recs = recs.filter(r => r.name.toLowerCase().includes(search) || (r.entity || '').toLowerCase().includes(search) || (r.ref || '').toLowerCase().includes(search));
-      if (filterType)   recs = recs.filter(r => r.type === filterType);
-      if (filterStatus) recs = recs.filter(r => r.status === filterStatus);
-      if (filterProj === 'unassigned') recs = recs.filter(r => !r.project);
-      else if (filterProj) recs = recs.filter(r => r.project === filterProj);
-
-      // Stats
-      const all      = load('documents', []);
-      const active   = all.filter(r => r.status === 'Active').length;
-      const expiring = all.filter(r => r.status === 'Expiring Soon' || (r.expiration && r.status !== 'Archived' && r.status !== 'Expired' && daysUntil(r.expiration) <= 30 && daysUntil(r.expiration) >= 0)).length;
-      const expired  = all.filter(r => r.status === 'Expired' || (r.expiration && r.status !== 'Archived' && daysUntil(r.expiration) < 0)).length;
-      const types    = [...new Set(all.map(r => r.type))];
-
-      $('docs-stats').innerHTML = `
-        <div class="stat-card"><div class="stat-label">Total Docs</div><div class="stat-value">${all.length}</div></div>
-        <div class="stat-card"><div class="stat-label">Active</div><div class="stat-value text-green">${active}</div></div>
-        <div class="stat-card"><div class="stat-label">Expiring Soon</div><div class="stat-value text-yellow">${expiring}</div></div>
-        <div class="stat-card"><div class="stat-label">Expired</div><div class="stat-value text-red">${expired}</div></div>`;
-
-      const typeBadge = t => ({
-        'Secretary of State': 'badge-purple', 'Operating Agreement': 'badge-blue',
-        'Statement of Information': 'badge-green', 'Articles of Incorporation': 'badge-purple',
-        'Articles of Organization': 'badge-purple', 'Business License': 'badge-yellow',
-        'EIN Confirmation': 'badge-blue', 'Tax Return': 'badge-green',
-        'Insurance Policy': 'badge-yellow', 'NDA': 'badge-gray',
-        'Contract': 'badge-blue', 'Other': 'badge-gray'
-      }[t] || 'badge-gray');
-      const statusBadge = s => ({ Active: 'badge-green', 'Expiring Soon': 'badge-yellow', Expired: 'badge-red', Draft: 'badge-gray', Archived: 'badge-gray' }[s] || 'badge-gray');
-
-      $('docs-tbody').innerHTML = recs.length ? recs.map(r => {
-        const days = r.expiration ? daysUntil(r.expiration) : null;
-        const countdown = days !== null && r.status !== 'Archived' ? `<span class="badge ${days < 0 ? 'badge-red' : days <= 30 ? 'badge-yellow' : 'badge-gray'}" style="margin-left:6px;font-size:10px">${days < 0 ? `${Math.abs(days)}d expired` : `${days}d left`}</span>` : '';
-        return `<tr>
-          <td class="fw-700">${r.name}${r.ref ? ` <span class="badge badge-gray" style="font-size:10px">#${r.ref}</span>` : ''}${r.project ? ` <span class="badge badge-blue" style="font-size:10px;margin-left:6px">${r.project}</span>` : ''}</td>
-          <td><span class="badge ${typeBadge(r.type)}">${r.type}</span></td>
-          <td>${r.entity || '—'}</td>
-          <td class="td-muted">${fmtDate(r.effective)}</td>
-          <td>${fmtDate(r.expiration)}${countdown}</td>
-          <td><span class="badge ${statusBadge(r.status)}">${r.status}</span></td>
-          <td>
-            <div style="display:flex;gap:6px">
-              <button class="btn-icon" title="Edit" onclick="App.Documents.openModal('${r.id}')">✏️</button>
-              <button class="btn-icon" title="Delete" onclick="App.Documents.delete('${r.id}')">🗑️</button>
-            </div>
-          </td>
-        </tr>`;
-      }).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📄</div><div class="empty-title">No documents yet</div><div class="empty-desc">Click "+ Add Document" to store your first business document.</div></div></td></tr>`;
-    },
-  },
 
   // ── KPI Dashboard ─────────────────────────────────────────
   KPI: {
@@ -1249,6 +1179,120 @@ const App = {
     updateCharts() {
       if (this.charts.revenue) { this.charts.revenue.data = this.getRevenueData(); this.charts.revenue.update(); }
       if (this.charts.burn)    { this.charts.burn.data    = this.getBurnData();    this.charts.burn.update(); }
+    },
+  },
+
+  // ── Calendar ──────────────────────────────────────────────
+  Calendar: {
+    editId: null,
+    openModal(id) {
+      this.editId = id || null;
+      $('calendar-modal-title').textContent = id ? '✏️ Edit Meeting' : '📆 New Meeting';
+      if (id) {
+        const rec = load('calendar', []).find(r => r.id === id);
+        if (rec) {
+          $('cal-title').value    = rec.title || '';
+          $('cal-datetime').value = rec.datetime || '';
+          $('cal-parties').value  = rec.parties || '';
+          $('cal-company').value  = rec.company || '';
+          $('cal-status').value   = rec.status || 'Scheduled';
+          $('cal-project').value  = rec.project || '';
+          $('cal-notes').value    = rec.notes || '';
+        }
+      } else {
+        ['cal-title','cal-datetime','cal-parties','cal-company','cal-notes'].forEach(i => $(i).value = '');
+        $('cal-status').value     = 'Scheduled';
+        $('cal-project').value    = '';
+        
+        // Auto-fill time to current time rounded to next hour
+        const now = new Date();
+        now.setHours(now.getHours() + 1, 0, 0, 0);
+        const tzoffset = now.getTimezoneOffset() * 60000;
+        const localISOTime = (new Date(now - tzoffset)).toISOString().slice(0, 16);
+        $('cal-datetime').value = localISOTime;
+      }
+      $('cal-edit-id').value = id || '';
+      $('modal-calendar').classList.add('open');
+    },
+    save() {
+      const title = $('cal-title').value.trim();
+      const datetime = $('cal-datetime').value;
+      if (!title || !datetime) { toast('Meeting Title and Date & Time are required.', 'error'); return; }
+      
+      const recs = load('calendar', []);
+      const rec = {
+        id: this.editId || uid(),
+        title, datetime,
+        parties: $('cal-parties').value.trim(),
+        company: $('cal-company').value.trim(),
+        status: $('cal-status').value,
+        project: $('cal-project').value,
+        notes: $('cal-notes').value.trim(),
+      };
+      
+      if (this.editId) {
+        const idx = recs.findIndex(r => r.id === this.editId);
+        if (idx > -1) recs[idx] = rec;
+      } else {
+        recs.push(rec);
+      }
+      
+      store('calendar', recs);
+      App.closeModal('modal-calendar');
+      this.render();
+      toast(this.editId ? 'Meeting updated.' : 'Meeting scheduled.');
+      this.editId = null;
+    },
+    delete(id) {
+      if (!confirm('Delete this meeting?')) return;
+      store('calendar', load('calendar', []).filter(r => r.id !== id));
+      this.render();
+      toast('Meeting deleted.');
+    },
+    render() {
+      let recs = load('calendar', []);
+      const search = ($('calendar-search')?.value || '').toLowerCase();
+      const filterProject = $('calendar-filter-project')?.value || '';
+      const filterStatus = $('calendar-filter-status')?.value || '';
+      
+      if (search) {
+        recs = recs.filter(r => 
+          (r.title && r.title.toLowerCase().includes(search)) || 
+          (r.parties && r.parties.toLowerCase().includes(search)) || 
+          (r.company && r.company.toLowerCase().includes(search))
+        );
+      }
+      if (filterProject === 'unassigned') recs = recs.filter(r => !r.project);
+      else if (filterProject) recs = recs.filter(r => r.project === filterProject);
+      if (filterStatus) recs = recs.filter(r => r.status === filterStatus);
+
+      // Sort by datetime, upcoming first, then past
+      recs.sort((a, b) => new Date(a.datetime) - new Date(b.datetime));
+
+      const statusBadge = s => ({ Scheduled:'badge-blue', Completed:'badge-green', Cancelled:'badge-gray' }[s] || 'badge-gray');
+      
+      const formatDateTime = dt => {
+        if (!dt) return '—';
+        const d = new Date(dt);
+        return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }) + ' at ' + 
+               d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+      };
+
+      $('calendar-tbody').innerHTML = recs.length ? recs.map(r => {
+        return `<tr>
+          <td class="fw-700">${r.title}${r.project ? ` <span class="badge badge-blue" style="font-size:10px;margin-left:6px">${r.project}</span>` : ''}</td>
+          <td>${formatDateTime(r.datetime)}</td>
+          <td>${r.parties || '—'}</td>
+          <td>${r.company || '—'}</td>
+          <td><span class="badge ${statusBadge(r.status)}">${r.status}</span></td>
+          <td>
+            <div style="display:flex;gap:6px">
+              <button class="btn-icon" title="Edit" onclick="App.Calendar.openModal('${r.id}')">✏️</button>
+              <button class="btn-icon" title="Delete" onclick="App.Calendar.delete('${r.id}')">🗑️</button>
+            </div>
+          </td>
+        </tr>`;
+      }).join('') : `<tr><td colspan="6"><div class="empty-state"><div class="empty-icon">📆</div><div class="empty-title">No meetings found</div><div class="empty-desc">Click "+ Add Meeting" to schedule one.</div></div></td></tr>`;
     },
   },
 };

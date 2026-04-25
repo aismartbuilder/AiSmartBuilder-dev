@@ -117,10 +117,10 @@
         <span class="nav-icon">📊</span>
         <span>KPI Dashboard</span>
       </div>
-      <div class="nav-item admin-only" data-panel="documents" id="nav-documents">
-        <span class="nav-icon">📄</span>
-        <span>Documents</span>
-        <span class="nav-badge" id="docs-badge" style="display:none">0</span>
+
+      <div class="nav-item" data-panel="calendar" id="nav-calendar">
+        <span class="nav-icon">📆</span>
+        <span>Calendar</span>
       </div>
     </nav>
 
@@ -296,6 +296,12 @@
             <option value="">All Projects</option>
             <option value="unassigned">General / Unassigned</option>
           </select>
+          <select class="form-select" id="ar-filter-client" onchange="App.AR.render()">
+            <option value="">All Clients</option>
+          </select>
+          <select class="form-select" id="ar-filter-month" onchange="App.AR.render()">
+            <option value="">All Months</option>
+          </select>
           <select class="form-select" id="ar-filter-status" onchange="App.AR.render()">
             <option value="">All Statuses</option>
             <option value="Draft">Draft</option>
@@ -349,6 +355,12 @@
           <select class="form-select project-filter" id="ap-filter-project" onchange="App.AP.render()">
             <option value="">All Projects</option>
             <option value="unassigned">General / Unassigned</option>
+          </select>
+          <select class="form-select" id="ap-filter-vendor" onchange="App.AP.render()">
+            <option value="">All Vendors</option>
+          </select>
+          <select class="form-select" id="ap-filter-month" onchange="App.AP.render()">
+            <option value="">All Months</option>
           </select>
           <select class="form-select" id="ap-filter-cat" onchange="App.AP.render()">
             <option value="">All Categories</option>
@@ -625,69 +637,50 @@
         </div>
       </section>
 
+
+
       <!-- ═══════════════════════════════════════════════════
-           PANEL 7 — Documents
+           PANEL 8 — Calendar
       ═══════════════════════════════════════════════════ -->
-      <section class="panel" id="panel-documents">
+      <section class="panel" id="panel-calendar">
         <div class="section-header">
           <div>
-            <div class="section-title">Documents</div>
-            <div class="section-desc">Secretary of State filings, Operating Agreements, and legal documents</div>
+            <div class="section-title">Calendar</div>
+            <div class="section-desc">Keep track of meetings, dates, and parties met with</div>
           </div>
           <div class="section-actions">
-            <button class="btn btn-primary" onclick="App.Documents.openModal()">+ Add Document</button>
+            <button class="btn btn-primary" onclick="App.Calendar.openModal()">+ Add Meeting</button>
           </div>
         </div>
 
-        <!-- Document Stats -->
-        <div class="stats-row" id="docs-stats"></div>
-
         <!-- Filter Bar -->
         <div class="filter-bar">
-          <input class="form-input" type="text" id="docs-search" placeholder="Search documents…" oninput="App.Documents.render()" />
-          <select class="form-select project-filter" id="docs-filter-project" onchange="App.Documents.render()">
+          <input class="form-input" type="text" id="calendar-search" placeholder="Search meetings or parties…" oninput="App.Calendar.render()" />
+          <select class="form-select project-filter" id="calendar-filter-project" onchange="App.Calendar.render()">
             <option value="">All Projects</option>
             <option value="unassigned">General / Unassigned</option>
           </select>
-          <select class="form-select" id="docs-filter-type" onchange="App.Documents.render()">
-            <option value="">All Types</option>
-            <option value="Secretary of State">Secretary of State</option>
-            <option value="Operating Agreement">Operating Agreement</option>
-            <option value="Statement of Information">Statement of Information</option>
-            <option value="Articles of Incorporation">Articles of Incorporation</option>
-            <option value="Articles of Organization">Articles of Organization</option>
-            <option value="Business License">Business License</option>
-            <option value="EIN Confirmation">EIN Confirmation</option>
-            <option value="Tax Return">Tax Return</option>
-            <option value="Insurance Policy">Insurance Policy</option>
-            <option value="NDA">NDA</option>
-            <option value="Contract">Contract</option>
-            <option value="Other">Other</option>
-          </select>
-          <select class="form-select" id="docs-filter-status" onchange="App.Documents.render()">
+          <select class="form-select" id="calendar-filter-status" onchange="App.Calendar.render()">
             <option value="">All Statuses</option>
-            <option value="Active">Active</option>
-            <option value="Expiring Soon">Expiring Soon</option>
-            <option value="Expired">Expired</option>
-            <option value="Draft">Draft</option>
-            <option value="Archived">Archived</option>
+            <option value="Scheduled">Scheduled</option>
+            <option value="Completed">Completed</option>
+            <option value="Cancelled">Cancelled</option>
           </select>
         </div>
 
         <div class="table-wrap">
-          <table id="docs-table">
+          <table id="calendar-table">
             <thead>
               <tr>
-                <th>Document Name / Project</th>
-                <th>Type</th>
-                <th>Entity / Signer</th>
-                <th>Effective Date</th>
-                <th>Expiration Date</th>
+                <th>Meeting Title / Project</th>
+                <th>Date &amp; Time</th>
+                <th>Parties Met With</th>
+                <th>Company</th>
                 <th>Status</th>
                 <th>Actions</th>
               </tr>
             </thead>
-            <tbody id="docs-tbody"></tbody>
+            <tbody id="calendar-tbody"></tbody>
           </table>
         </div>
       </section>
@@ -1080,78 +1073,53 @@
   </div>
 </div>
 
-<!-- Document Modal -->
-<div class="modal-overlay" id="modal-documents">
-  <div class="modal" style="max-width:640px">
+
+
+<!-- Calendar Modal -->
+<div class="modal-overlay" id="modal-calendar">
+  <div class="modal">
     <div class="modal-header">
-      <div class="modal-title" id="docs-modal-title">📄 Add Document</div>
-      <button class="modal-close" onclick="App.closeModal('modal-documents')">✕</button>
+      <div class="modal-title" id="calendar-modal-title">📆 New Meeting</div>
+      <button class="modal-close" onclick="App.closeModal('modal-calendar')">✕</button>
     </div>
     <div class="form-grid-2">
       <div class="form-group">
-        <label class="form-label">Document Name *</label>
-        <input class="form-input" id="doc-name" type="text" placeholder="e.g., Operating Agreement — My Company LLC" />
+        <label class="form-label">Meeting Title *</label>
+        <input class="form-input" id="cal-title" type="text" placeholder="e.g. Q3 Review" />
       </div>
       <div class="form-group">
-        <label class="form-label">Document Type *</label>
-        <select class="form-select" id="doc-type">
-          <option>Secretary of State</option>
-          <option>Operating Agreement</option>
-          <option>Statement of Information</option>
-          <option>Articles of Incorporation</option>
-          <option>Articles of Organization</option>
-          <option>Business License</option>
-          <option>EIN Confirmation</option>
-          <option>Tax Return</option>
-          <option>Insurance Policy</option>
-          <option>NDA</option>
-          <option>Contract</option>
-          <option>Other</option>
-        </select>
+        <label class="form-label">Date &amp; Time *</label>
+        <input class="form-input" id="cal-datetime" type="datetime-local" />
       </div>
       <div class="form-group">
-        <label class="form-label">Entity / Signer</label>
-        <input class="form-input" id="doc-entity" type="text" placeholder="My Company LLC" />
+        <label class="form-label">Parties Met With</label>
+        <input class="form-input" id="cal-parties" type="text" placeholder="John Doe, Jane Smith" />
       </div>
       <div class="form-group">
-        <label class="form-label">Reference / Filing #</label>
-        <input class="form-input" id="doc-ref" type="text" placeholder="e.g., C1234567" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Effective Date</label>
-        <input class="form-input" id="doc-effective" type="date" />
-      </div>
-      <div class="form-group">
-        <label class="form-label">Expiration Date</label>
-        <input class="form-input" id="doc-expiration" type="date" />
+        <label class="form-label">Company</label>
+        <input class="form-input" id="cal-company" type="text" placeholder="Acme Corp" />
       </div>
       <div class="form-group">
         <label class="form-label">Status</label>
-        <select class="form-select" id="doc-status">
-          <option>Active</option>
-          <option>Expiring Soon</option>
-          <option>Expired</option>
-          <option>Draft</option>
-          <option>Archived</option>
+        <select class="form-select" id="cal-status">
+          <option value="Scheduled">Scheduled</option>
+          <option value="Completed">Completed</option>
+          <option value="Cancelled">Cancelled</option>
         </select>
       </div>
       <div class="form-group">
-        <label class="form-label">Filing State / Jurisdiction</label>
-        <input class="form-input" id="doc-jurisdiction" type="text" placeholder="California" />
-      </div>
-      <div class="form-group">
         <label class="form-label">Project / Sub-business</label>
-        <select class="form-select project-dropdown" id="doc-project"></select>
+        <select class="form-select project-dropdown" id="cal-project"></select>
       </div>
     </div>
     <div class="form-group">
-      <label class="form-label">Notes / Description</label>
-      <textarea class="form-textarea" id="doc-notes" placeholder="Key provisions, renewal instructions, filing authority…"></textarea>
+      <label class="form-label">Notes / Link</label>
+      <textarea class="form-textarea" id="cal-notes" placeholder="Meeting agenda or Zoom link…"></textarea>
     </div>
-    <input type="hidden" id="doc-edit-id" />
+    <input type="hidden" id="cal-edit-id" />
     <div class="modal-footer">
-      <button class="btn btn-secondary" onclick="App.closeModal('modal-documents')">Cancel</button>
-      <button class="btn btn-primary" onclick="App.Documents.save()">Save Document</button>
+      <button class="btn btn-secondary" onclick="App.closeModal('modal-calendar')">Cancel</button>
+      <button class="btn btn-primary" onclick="App.Calendar.save()">Save Meeting</button>
     </div>
   </div>
 </div>
