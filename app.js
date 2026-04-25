@@ -362,7 +362,7 @@ const App = {
   },
 
   openAddModal() {
-    const map = { profile: () => App.openProfileModal(), ar: () => App.AR.openModal(), ap: () => App.AP.openModal(), assets: () => App.Assets.openModal(), compliance: () => App.Compliance.openModal(), kpi: () => App.KPI.saveSnapshot() };
+    const map = { profile: () => App.openProfileModal(), ar: () => App.AR.openModal(), ap: () => App.AP.openModal(), assets: () => App.Assets.openModal(), compliance: () => App.Compliance.openModal(), kpi: () => App.KPI.saveSnapshot(), calendar: () => App.Calendar.openModal() };
     (map[this.currentPanel] || (() => {}))();
   },
 
