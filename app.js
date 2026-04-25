@@ -649,67 +649,7 @@ const App = {
 
   // ── Accounts Payable ──────────────────────────────────────
   AP: {
-    currentTab: 'bills',
     editId: null,
-    switchTab(tab) {
-      this.currentTab = tab;
-      $('ap-bills').style.display = tab === 'bills' ? '' : 'none';
-      $('ap-statements').style.display = tab === 'statements' ? '' : 'none';
-      
-      const btnBills = $('ap-tab-btn-bills');
-      const btnStatements = $('ap-tab-btn-statements');
-      if (btnBills) { btnBills.style.borderColor = tab === 'bills' ? 'var(--accent)' : ''; btnBills.style.color = tab === 'bills' ? 'var(--accent-light)' : ''; }
-      if (btnStatements) { btnStatements.style.borderColor = tab === 'statements' ? 'var(--accent)' : ''; btnStatements.style.color = tab === 'statements' ? 'var(--accent-light)' : ''; }
-      
-      if (tab === 'statements') this.renderStatements();
-    },
-    uploadStatement(e) {
-      const file = e.target.files[0];
-      if (!file) return;
-      if (file.size > 2 * 1024 * 1024) {
-        toast('File too large. Please keep statements under 2MB.', 'error');
-        e.target.value = '';
-        return;
-      }
-      const reader = new FileReader();
-      reader.onload = (ev) => {
-        const statements = load('ap_statements', []);
-        statements.push({
-          id: uid(),
-          name: file.name,
-          date: today(),
-          size: (file.size / 1024).toFixed(1) + ' KB',
-          data: ev.target.result
-        });
-        store('ap_statements', statements);
-        toast('Bank statement uploaded successfully.');
-        App.AP.renderStatements();
-      };
-      reader.readAsDataURL(file);
-      e.target.value = '';
-    },
-    deleteStatement(id) {
-      if (!confirm('Delete this bank statement?')) return;
-      store('ap_statements', load('ap_statements', []).filter(r => r.id !== id));
-      this.renderStatements();
-      toast('Statement deleted.');
-    },
-    renderStatements() {
-      const statements = load('ap_statements', []);
-      $('ap-statements-tbody').innerHTML = statements.length ? statements.map(s => `
-        <tr>
-          <td class="fw-700">📄 ${s.name}</td>
-          <td>${fmtDate(s.date)}</td>
-          <td class="td-muted">${s.size}</td>
-          <td>
-            <div style="display:flex;gap:6px">
-              <a href="${s.data}" download="${s.name}" class="btn-icon" title="Download" style="text-decoration:none;display:flex;align-items:center;justify-content:center">⬇️</a>
-              <button class="btn-icon" title="Delete" onclick="App.AP.deleteStatement('${s.id}')">🗑️</button>
-            </div>
-          </td>
-        </tr>
-      `).join('') : `<tr><td colspan="4"><div class="empty-state"><div class="empty-icon">📁</div><div class="empty-title">No statements uploaded</div><div class="empty-desc">Click "+ Upload Statement" to add your first record.</div></div></td></tr>`;
-    },
     openModal(id) {
       this.editId = id || null;
       $('ap-modal-title').textContent = id ? '✏️ Edit Bill' : '📤 New Bill';
@@ -774,6 +714,12 @@ const App = {
       else if (filterProj) recs = recs.filter(r => r.project === filterProj);
       if (filterVendor) recs = recs.filter(r => r.vendor === filterVendor);
       if (filterMonth) recs = recs.filter(r => r.due && r.due.startsWith(filterMonth));
+
+      const sort = $('ap-sort')?.value || '';
+      if (sort === 'recent') recs.sort((a, b) => new Date(b.due || 0) - new Date(a.due || 0));
+      else if (sort === 'oldest') recs.sort((a, b) => new Date(a.due || 0) - new Date(b.due || 0));
+      else if (sort === 'expensive') recs.sort((a, b) => b.amount - a.amount);
+      else if (sort === 'least-expensive') recs.sort((a, b) => a.amount - b.amount);
 
       const all = load('ap', []);
 
