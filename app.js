@@ -698,6 +698,22 @@ const App = {
       if (!confirm('Delete this bill?')) return;
       store('ap', load('ap', []).filter(r => r.id !== id)); this.render(); App.refreshBadges(); toast('Bill deleted.');
     },
+    copy(id) {
+      const rec = load('ap', []).find(r => r.id === id);
+      if (!rec) return;
+      this.editId = null;
+      $('ap-modal-title').textContent = '📤 Copy Bill';
+      $('ap-vendor').value    = rec.vendor;
+      $('ap-amount').value    = rec.amount;
+      $('ap-due').value       = rec.due;
+      $('ap-cat').value       = rec.cat;
+      $('ap-status').value    = rec.status;
+      $('ap-recurring').value = rec.recurring || '';
+      $('ap-desc').value      = rec.desc;
+      $('ap-project').value   = rec.project || '';
+      $('ap-edit-id').value   = '';
+      $('modal-ap').classList.add('open');
+    },
     render() {
       let recs = load('ap', []);
       const search = ($('ap-search')?.value || '').toLowerCase();
@@ -768,8 +784,9 @@ const App = {
           <td><span class="badge ${catBadge(r.cat)}">${r.cat}</span></td>
           <td><span class="badge ${statusBadge(r.status)}">${r.status}</span></td>
           <td><div style="display:flex;gap:6px">
-            <button class="btn-icon" onclick="App.AP.openModal('${r.id}')">✏️</button>
-            <button class="btn-icon" onclick="App.AP.delete('${r.id}')">🗑️</button>
+            <button class="btn-icon" title="Copy" onclick="App.AP.copy('${r.id}')">📄</button>
+            <button class="btn-icon" title="Edit" onclick="App.AP.openModal('${r.id}')">✏️</button>
+            <button class="btn-icon" title="Delete" onclick="App.AP.delete('${r.id}')">🗑️</button>
           </div></td>
         </tr>`;
       }).join('') : `<tr><td colspan="7"><div class="empty-state"><div class="empty-icon">📤</div><div class="empty-title">No bills yet</div><div class="empty-desc">Click "+ New Bill" to add a vendor bill.</div></div></td></tr>`;
